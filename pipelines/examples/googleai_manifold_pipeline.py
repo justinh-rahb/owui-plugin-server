@@ -5,7 +5,7 @@ date: 2024-05-29
 version: 1.0
 license: MIT
 description: A pipeline for generating text using the Google Gemini API.
-dependencies: google-generativeai
+dependencies: requests, google-generativeai
 environment_variables: GOOGLEAI_API_KEY
 """
 
