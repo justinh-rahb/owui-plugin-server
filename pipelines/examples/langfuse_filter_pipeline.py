@@ -62,7 +62,7 @@ class Pipeline:
         self.langfuse.flush()
         pass
 
-    async def on_valves_update(self):
+    async def on_valves_updated(self):
         # This function is called when the valves are updated.
 
         self.set_langfuse()
@@ -77,8 +77,8 @@ class Pipeline:
         )
         self.langfuse.auth_check()
 
-    async def filter(self, body: dict, user: Optional[dict] = None) -> dict:
-        print(f"filter:{__name__}")
+    async def inlet(self, body: dict, user: Optional[dict] = None) -> dict:
+        print(f"inlet:{__name__}")
 
         trace = self.langfuse.trace(
             name=f"filter:{__name__}",

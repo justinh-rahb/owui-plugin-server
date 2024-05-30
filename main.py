@@ -229,7 +229,11 @@ async def get_models():
                     "type": pipeline["type"],
                     **(
                         {
-                            "pipelines": pipeline.get("pipelines", []),
+                            "pipelines": (
+                                pipeline["valves"].pipelines
+                                if pipeline.get("valves", None)
+                                else []
+                            ),
                             "priority": pipeline.get("priority", 0),
                         }
                         if pipeline.get("type", "pipe") == "filter"
@@ -245,83 +249,214 @@ async def get_models():
     }
 
 
-@app.get("/v1/{pipeline_id}/valves")
-@app.get("/{pipeline_id}/valves")
-async def get_valves(pipeline_id: str):
-    if pipeline_id not in app.state.PIPELINES:
+@app.get("/v1")
+@app.get("/")
+async def get_status():
+    return {"status": True}
+
+
+@app.get("/v1/pipelines")
+@app.get("/pipelines")
+async def list_pipelines(user: str = Depends(get_current_user)):
+    if user == API_KEY:
+        return {
+            "data": [
+                {
+                    "id": pipeline_id,
+                    "name": PIPELINE_NAMES[pipeline_id],
+                    "type": (
+                        PIPELINE_MODULES[pipeline_id].type
+                        if hasattr(PIPELINE_MODULES[pipeline_id], "type")
+                        else "pipe"
+                    ),
+                    "valves": (
+                        True
+                        if hasattr(PIPELINE_MODULES[pipeline_id], "valves")
+                        else False
+                    ),
+                }
+                for pipeline_id in list(PIPELINE_MODULES.keys())
+            ]
+        }
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+        )
+
+
+class AddPipelineForm(BaseModel):
+    url: str
+
+
+async def download_file(url: str, dest_folder: str):
+    filename = os.path.basename(urlparse(url).path)
+    if not filename.endswith(".py"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="URL must point to a Python file",
+        )
+
+    file_path = os.path.join(dest_folder, filename)
+
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            if response.status != 200:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Failed to download file",
+                )
+            with open(file_path, "wb") as f:
+                f.write(await response.read())
+
+    return file_path
+
+
+@app.post("/v1/pipelines/add")
+@app.post("/pipelines/add")
+async def add_pipeline(
+    form_data: AddPipelineForm, user: str = Depends(get_current_user)
+):
+    if user != API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+        )
+
+    try:
+        url = convert_to_raw_url(form_data.url)
+
+        print(url)
+        file_path = await download_file(url, dest_folder=PIPELINES_DIR)
+        await reload()
+        return {
+            "status": True,
+            "detail": f"Pipeline added successfully from {file_path}",
+        }
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
+
+
+class DeletePipelineForm(BaseModel):
+    id: str
+
+
+@app.delete("/v1/pipelines/delete")
+@app.delete("/pipelines/delete")
+async def delete_pipeline(
+    form_data: DeletePipelineForm, user: str = Depends(get_current_user)
+):
+    if user != API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+        )
+
+    pipeline_id = form_data.id
+    pipeline_name = PIPELINE_NAMES.get(pipeline_id.split(".")[0], None)
+
+    if PIPELINE_MODULES[pipeline_id]:
+        if hasattr(PIPELINE_MODULES[pipeline_id], "on_shutdown"):
+            await PIPELINE_MODULES[pipeline_id].on_shutdown()
+
+    pipeline_path = os.path.join(PIPELINES_DIR, f"{pipeline_name}.py")
+    if os.path.exists(pipeline_path):
+        os.remove(pipeline_path)
+        await reload()
+        return {
+            "status": True,
+            "detail": f"Pipeline {pipeline_id} deleted successfully",
+        }
+    else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Pipeline {pipeline_id} not found",
         )
 
-    pipeline = app.state.PIPELINES[pipeline_id]
-    if not pipeline.get("valves", False):
+
+@app.post("/v1/pipelines/reload")
+@app.post("/pipelines/reload")
+async def reload_pipelines(user: str = Depends(get_current_user)):
+    if user == API_KEY:
+        await reload()
+        return {"message": "Pipelines reloaded successfully."}
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+        )
+
+
+@app.get("/v1/{pipeline_id}/valves")
+@app.get("/{pipeline_id}/valves")
+async def get_valves(pipeline_id: str):
+    if pipeline_id not in PIPELINE_MODULES:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pipeline {pipeline_id} not found",
+        )
+
+    pipeline = PIPELINE_MODULES[pipeline_id]
+
+    if hasattr(pipeline, "valves") is False:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Valves for {pipeline_id} not found",
         )
-    if pipeline["type"] == "manifold":
-        manifold_id, pipeline_id = pipeline_id.split(".", 1)
-        pipeline_id = manifold_id
 
-    pipeline_module = PIPELINE_MODULES[pipeline_id]
-    return pipeline_module.valves
+    return pipeline.valves
 
 
 @app.get("/v1/{pipeline_id}/valves/spec")
 @app.get("/{pipeline_id}/valves/spec")
 async def get_valves_spec(pipeline_id: str):
-
-    if pipeline_id not in app.state.PIPELINES:
+    if pipeline_id not in PIPELINE_MODULES:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Pipeline {pipeline_id} not found",
         )
 
-    pipeline = app.state.PIPELINES[pipeline_id]
+    pipeline = PIPELINE_MODULES[pipeline_id]
 
-    if not pipeline.get("valves", False):
+    if hasattr(pipeline, "valves") is False:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Valves for {pipeline_id} not found",
         )
-    if pipeline["type"] == "manifold":
-        manifold_id, pipeline_id = pipeline_id.split(".", 1)
-        pipeline_id = manifold_id
 
-    pipeline_module = PIPELINE_MODULES[pipeline_id]
-    return pipeline_module.valves.schema()
+    return pipeline.valves.schema()
 
 
 @app.post("/v1/{pipeline_id}/valves/update")
 @app.post("/{pipeline_id}/valves/update")
 async def update_valves(pipeline_id: str, form_data: dict):
 
-    if pipeline_id not in app.state.PIPELINES:
+    if pipeline_id not in PIPELINE_MODULES:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Pipeline {pipeline_id} not found",
         )
 
-    pipeline = app.state.PIPELINES[pipeline_id]
-    if not pipeline.get("valves", False):
+    pipeline = PIPELINE_MODULES[pipeline_id]
+
+    if hasattr(pipeline, "valves") is False:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Valves for {pipeline_id} not found",
         )
-    if pipeline["type"] == "manifold":
-        manifold_id, pipeline_id = pipeline_id.split(".", 1)
-        pipeline_id = manifold_id
-
-    pipeline_module = PIPELINE_MODULES[pipeline_id]
 
     try:
-        ValvesModel = pipeline_module.valves.__class__
+        ValvesModel = pipeline.valves.__class__
         valves = ValvesModel(**form_data)
-        pipeline_module.valves = valves
+        pipeline.valves = valves
 
-        if hasattr(pipeline_module, "on_valves_update"):
-            await pipeline_module.on_valves_update()
+        if hasattr(pipeline, "on_valves_updated"):
+            await pipeline.on_valves_updated()
     except Exception as e:
         print(e)
         raise HTTPException(
@@ -329,12 +464,12 @@ async def update_valves(pipeline_id: str, form_data: dict):
             detail=f"{str(e)}",
         )
 
-    return pipeline_module.valves
+    return pipeline.valves
 
 
-@app.post("/v1/{pipeline_id}/filter")
-@app.post("/{pipeline_id}/filter")
-async def filter(pipeline_id: str, form_data: FilterForm):
+@app.post("/v1/{pipeline_id}/filter/inlet")
+@app.post("/{pipeline_id}/filter/inlet")
+async def filter_inlet(pipeline_id: str, form_data: FilterForm):
     if (
         pipeline_id not in app.state.PIPELINES
         or app.state.PIPELINES[pipeline_id].get("type", "pipe") != "filter"
@@ -347,8 +482,39 @@ async def filter(pipeline_id: str, form_data: FilterForm):
     pipeline = PIPELINE_MODULES[pipeline_id]
 
     try:
-        body = await pipeline.filter(form_data.body, form_data.user)
-        return body
+        if hasattr(pipeline, "inlet"):
+            body = await pipeline.inlet(form_data.body, form_data.user)
+            return body
+        else:
+            return form_data.body
+    except Exception as e:
+        print(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{str(e)}",
+        )
+
+
+@app.post("/v1/{pipeline_id}/filter/outlet")
+@app.post("/{pipeline_id}/filter/outlet")
+async def filter_outlet(pipeline_id: str, form_data: FilterForm):
+    if (
+        pipeline_id not in app.state.PIPELINES
+        or app.state.PIPELINES[pipeline_id].get("type", "pipe") != "filter"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Filter {pipeline_id} not found",
+        )
+
+    pipeline = PIPELINE_MODULES[pipeline_id]
+
+    try:
+        if hasattr(pipeline, "outlet"):
+            body = await pipeline.outlet(form_data.body, form_data.user)
+            return body
+        else:
+            return form_data.body
     except Exception as e:
         print(e)
         raise HTTPException(
@@ -360,7 +526,7 @@ async def filter(pipeline_id: str, form_data: FilterForm):
 @app.post("/v1/chat/completions")
 @app.post("/chat/completions")
 async def generate_openai_chat_completion(form_data: OpenAIChatCompletionForm):
-    user_message = get_last_user_message(form_data.messages)
+    user_message = get_last_user_message(form_data.messages.model_dump())
     messages = [message.model_dump() for message in form_data.messages]
 
     if (
@@ -486,133 +652,3 @@ async def generate_openai_chat_completion(form_data: OpenAIChatCompletionForm):
                 }
 
     return await run_in_threadpool(job)
-
-
-@app.get("/v1")
-@app.get("/")
-async def get_status():
-    return {"status": True}
-
-
-@app.get("/v1/pipelines")
-@app.get("/pipelines")
-async def list_pipelines(user: str = Depends(get_current_user)):
-    if user == API_KEY:
-        return {
-            "data": [
-                {"id": pipeline_id, "name": PIPELINE_NAMES[pipeline_id]}
-                for pipeline_id in list(PIPELINE_MODULES.keys())
-            ]
-        }
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
-        )
-
-
-class AddPipelineForm(BaseModel):
-    url: str
-
-
-async def download_file(url: str, dest_folder: str):
-    filename = os.path.basename(urlparse(url).path)
-    if not filename.endswith(".py"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="URL must point to a Python file",
-        )
-
-    file_path = os.path.join(dest_folder, filename)
-
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            if response.status != 200:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Failed to download file",
-                )
-            with open(file_path, "wb") as f:
-                f.write(await response.read())
-
-    return file_path
-
-
-@app.post("/v1/pipelines/add")
-@app.post("/pipelines/add")
-async def add_pipeline(
-    form_data: AddPipelineForm, user: str = Depends(get_current_user)
-):
-    if user != API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
-        )
-
-    try:
-        url = convert_to_raw_url(form_data.url)
-
-        print(url)
-        file_path = await download_file(url, dest_folder=PIPELINES_DIR)
-        await reload()
-        return {
-            "status": True,
-            "detail": f"Pipeline added successfully from {file_path}",
-        }
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e),
-        )
-
-
-class DeletePipelineForm(BaseModel):
-    id: str
-
-
-@app.delete("/v1/pipelines/delete")
-@app.delete("/pipelines/delete")
-async def delete_pipeline(
-    form_data: DeletePipelineForm, user: str = Depends(get_current_user)
-):
-    if user != API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
-        )
-
-    pipeline_id = form_data.id
-    pipeline_name = PIPELINE_NAMES.get(pipeline_id.split(".")[0], None)
-
-    if PIPELINE_MODULES[pipeline_id]:
-        if hasattr(PIPELINE_MODULES[pipeline_id], "on_shutdown"):
-            await PIPELINE_MODULES[pipeline_id].on_shutdown()
-
-    pipeline_path = os.path.join(PIPELINES_DIR, f"{pipeline_name}.py")
-    if os.path.exists(pipeline_path):
-        os.remove(pipeline_path)
-        await reload()
-        return {
-            "status": True,
-            "detail": f"Pipeline {pipeline_id} deleted successfully",
-        }
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Pipeline {pipeline_id} not found",
-        )
-
-
-@app.post("/v1/pipelines/reload")
-@app.post("/pipelines/reload")
-async def reload_pipelines(user: str = Depends(get_current_user)):
-    if user == API_KEY:
-        await reload()
-        return {"message": "Pipelines reloaded successfully."}
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
-        )
