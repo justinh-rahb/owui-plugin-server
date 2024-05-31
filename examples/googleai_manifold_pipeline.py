@@ -28,12 +28,13 @@ class Pipeline:
         genai.configure(api_key=self.valves.GOOGLEAI_API_KEY)
 
     def get_google_models(self):
+        # Update with available Google Gemini models
         return [
             {"id": "gemini-1.5-flash", "name": "gemini-1.5-flash"},
             {"id": "gemini-1.5-pro", "name": "gemini-1.5-pro"},
             {"id": "gemini-pro", "name": "gemini-pro"},
-            {"id": "gemini-pro-vision", "name": "gemini-pro-vision"},
-            # Add other Google models here as they become available
+            {"id": "gemini-pro-vision", "name": "gemini-pro-vision"}, 
+            # Add others as they are released
         ]
 
     async def on_startup(self):
@@ -49,8 +50,6 @@ class Pipeline:
         genai.configure(api_key=self.valves.GOOGLEAI_API_KEY)
         pass
 
-    # Pipelines are the models that are available in the manifold.
-    # It can be a list or a function that returns a list.
     def pipelines(self) -> List[dict]:
         return self.get_google_models()
 
@@ -58,6 +57,10 @@ class Pipeline:
         self, user_message: str, model_id: str, messages: List[dict], body: dict
     ) -> Union[str, Generator, Iterator]:
         try:
+            if messages is None:
+                messages = []
+            messages.append({"role": "user", "content": user_message})
+
             if body.get("stream", False):
                 return self.stream_response(model_id, messages, body)
             else:
@@ -66,9 +69,8 @@ class Pipeline:
             return f"Error: {e}"
 
     def translate_parameters(self, body: dict) -> dict:
-        # Translate OpenAI parameters to Google Gemini parameters
         return {
-            "max_tokens": body.get("max_tokens", 4096),
+            "max_output_tokens": body.get("max_tokens", 4096),
             "temperature": body.get("temperature", 0.8),
             "top_k": body.get("top_k", 40),
             "top_p": body.get("top_p", 0.9),
@@ -79,21 +81,22 @@ class Pipeline:
         self, model_id: str, messages: List[dict], body: dict
     ) -> Generator:
         params = self.translate_parameters(body)
-        model = genai.GenerativeModel(model_id)
-        stream = model.generate_content(
-            messages=messages,
+        model = genai.GenerativeModel(model=model_id) 
+        response = model.generate_text(
             **params,
-            stream=True,
+            prompt=messages[-1]['content'],  
+            stream=True, # Enable streaming
         )
 
-        for chunk in stream:
-            yield chunk.text
+        # Gemini doesn't use chunks with types. Yield text directly.
+        for chunk in response:
+            yield chunk.text 
 
     def get_completion(self, model_id: str, messages: List[dict], body: dict) -> str:
         params = self.translate_parameters(body)
-        model = genai.GenerativeModel(model_id)
-        response = model.generate_content(
-            messages=messages,
-            **params
+        model = genai.GenerativeModel(model=model_id) 
+        response = model.generate_text(
+            **params,
+            prompt=messages[-1]['content'] 
         )
         return response.text
