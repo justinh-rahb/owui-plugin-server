@@ -66,7 +66,7 @@ class Pipeline:
 
     def stream_response(self, model_id: str, messages: List[dict], body: dict) -> Generator:
         params = self.translate_parameters(body)
-        model = genai.GenerativeModel(model_id=model_id)  # Corrected instantiation
+        model = genai.GenerativeModel(model_id=model_id)  # Direct instantiation
         response = model.generate_text(
             prompt=messages[-1]['content'],  
             stream=True,
@@ -74,11 +74,11 @@ class Pipeline:
         )
 
         for chunk in response:
-            yield chunk.text  # Assume chunks come with a 'text' attribute
+            yield chunk.text  # Assuming chunks come with a 'text' attribute
 
     def get_completion(self, model_id: str, messages: List[dict], body: dict) -> str:
         params = self.translate_parameters(body)
-        model = genai.GenerativeModel(model_id=model_id)  # Corrected instantiation
+        model = genai.GenerativeModel(model_id=model_id)  # Direct instantiation
         response = model.generate_text(
             prompt=messages[-1]['content'],
             **params
