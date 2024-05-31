@@ -66,8 +66,9 @@ class Pipeline:
 
     def stream_response(self, model_id: str, messages: List[dict], body: dict) -> Generator:
         params = self.translate_parameters(body)
-        model = genai.GenerativeModel(model_id=model_id)  # Direct instantiation
-        response = model.generate_text(
+        # Assuming model_id needs to be passed during the generate_text call
+        response = genai.generate_text(
+            model=model_id,  
             prompt=messages[-1]['content'],  
             stream=True,
             **params
@@ -78,8 +79,9 @@ class Pipeline:
 
     def get_completion(self, model_id: str, messages: List[dict], body: dict) -> str:
         params = self.translate_parameters(body)
-        model = genai.GenerativeModel(model_id=model_id)  # Direct instantiation
-        response = model.generate_text(
+        # Assuming model_id needs to be passed during the generate_text call
+        response = genai.generate_text(
+            model=model_id, 
             prompt=messages[-1]['content'],
             **params
         )
