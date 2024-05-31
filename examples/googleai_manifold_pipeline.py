@@ -43,6 +43,10 @@ class Pipeline:
     async def on_shutdown(self):
         print(f"Shutting down: {__name__}")
 
+    def pipelines(self) -> List[dict]:
+        # Retrieves and returns a list of available models
+        return self.get_google_models()
+
     def pipe(
         self, user_message: str, model_id: str, messages: List[dict], body: dict
     ) -> Union[str, Generator]:
@@ -69,23 +73,27 @@ class Pipeline:
     def stream_response(
         self, model_id: str, messages: List[dict], params: dict
     ) -> Generator:
-        model = genai.GenerativeModel.init(model_id=model_id)
-        response = model.generate_text(
-            prompt=messages[-1]['content'],
-            stream=True,
-            **params
-        )
-
-        # Gemini doesn't use chunks with types. Yield text directly.
-        for chunk in response:
-            yield chunk.text 
+        try:
+            model = genai.GenerativeModel.init(model_id=model_id)
+            response = model.generate_text(
+                prompt=messages[-1]['content'],
+                stream=True,
+                **params
+            )
+            for chunk in response:
+                yield chunk.text 
+        except Exception as e:
+            print(f"Error in stream_response: {e}")
 
     def get_completion(
         self, model_id: str, messages: List[dict], params: dict
     ) -> str:
-        model = genai.GenerativeModel.init(model_id=model_id)
-        response = model.generate_text(
-            prompt=messages[-1]['content'],
-            **params
-        )
-        return response.text
+        try:
+            model = genai.GenerativeModel.init(model_id=model_id)
+            response = model.generate_text(
+                prompt=messages[-1]['content'],
+                **params
+            )
+            return response.text
+        except Exception as e:
+            print(f"Error in get_completion: {e}")
