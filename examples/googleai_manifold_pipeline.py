@@ -33,9 +33,11 @@ class Pipeline:
             models = genai.list_models()
             available_models = []
             for model in models:
+                # Extract a concise name from the model ID
+                model_name = model.name.split("/")[-1]  
                 available_models.append({
                     "id": model.name,  # Use model.name for the ID
-                    "name": model.description  # Use model.description for the name
+                    "name": model_name  # Use extracted model name
                 })
             return available_models
         except Exception as e:
