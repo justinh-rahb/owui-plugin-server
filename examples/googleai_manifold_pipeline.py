@@ -30,10 +30,10 @@ class Pipeline:
     def get_google_models(self):
         # This could fetch models dynamically from Google in the future
         return [
-            {"id": "gemini-1.5-flash", "name": "gemini-1.5-flash"},
-            {"id": "gemini-1.5-pro", "name": "gemini-1.5-pro"},
-            {"id": "gemini-pro", "name": "gemini-pro"},
-            {"id": "gemini-pro-vision", "name": "gemini-pro-vision"},
+            {"id": "models/gemini-1.5-flash", "name": "gemini-1.5-flash"},
+            {"id": "models/gemini-1.5-pro", "name": "gemini-1.5-pro"},
+            {"id": "models/gemini-pro", "name": "gemini-pro"},
+            {"id": "models/gemini-pro-vision", "name": "gemini-pro-vision"},
             # Add other Google models as they become available
         ]
 
