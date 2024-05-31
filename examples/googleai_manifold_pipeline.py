@@ -30,10 +30,10 @@ class Pipeline:
     def get_google_models(self):
         # This could fetch models dynamically from Google in the future
         return [
-            {"id": "models/gemini-1.5-flash", "name": "gemini-1.5-flash"},
-            {"id": "models/gemini-1.5-pro", "name": "gemini-1.5-pro"},
-            {"id": "models/gemini-pro", "name": "gemini-pro"},
-            {"id": "models/gemini-pro-vision", "name": "gemini-pro-vision"},
+            {"id": "gemini-1.5-flash", "name": "gemini-1.5-flash"},
+            {"id": "gemini-1.5-pro", "name": "gemini-1.5-pro"},
+            {"id": "gemini-pro", "name": "gemini-pro"},
+            {"id": "gemini-pro-vision", "name": "gemini-pro-vision"},
             # Add other Google models as they become available
         ]
 
@@ -66,9 +66,10 @@ class Pipeline:
 
     def stream_response(self, model_id: str, messages: List[dict], body: dict) -> Generator:
         params = self.translate_parameters(body)
-        # Assuming model_id needs to be passed during the generate_text call
+        # Prepend 'models/' to the model_id before passing it to the API call
+        full_model_id = f"models/{model_id}"
         response = genai.generate_text(
-            model=model_id,
+            model=full_model_id,
             prompt=messages[-1]['content'],
             stream=True,
             **params
@@ -79,9 +80,10 @@ class Pipeline:
 
     def get_completion(self, model_id: str, messages: List[dict], body: dict) -> str:
         params = self.translate_parameters(body)
-        # Assuming model_id needs to be passed during the generate_text call
+        # Prepend 'models/' to the model_id before passing it to the API call
+        full_model_id = f"models/{model_id}"
         response = genai.generate_text(
-            model=model_id,
+            model=full_model_id,
             prompt=messages[-1]['content'],
             **params
         )
