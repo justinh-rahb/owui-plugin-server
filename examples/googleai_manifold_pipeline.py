@@ -64,11 +64,10 @@ class Pipeline:
         except Exception as e:
             return f"Error: {e}"
 
-    def stream_response(
-        self, model_id: str, messages: List[dict], body: dict
-    ) -> Generator:
+    def stream_response(self, model_id: str, messages: List[dict], body: dict) -> Generator:
         params = self.translate_parameters(body)
-        response = genai.GenerativeModel.init(model_id=model_id).generate_text(
+        model = genai.GenerativeModel(model_id=model_id)  # Corrected instantiation
+        response = model.generate_text(
             prompt=messages[-1]['content'],  
             stream=True,
             **params
@@ -79,8 +78,9 @@ class Pipeline:
 
     def get_completion(self, model_id: str, messages: List[dict], body: dict) -> str:
         params = self.translate_parameters(body)
-        response = genai.GenerativeModel.init(model_id=model_id).generate_text(
-            prompt=messages[-1]['content'], 
+        model = genai.GenerativeModel(model_id=model_id)  # Corrected instantiation
+        response = model.generate_text(
+            prompt=messages[-1]['content'],
             **params
         )
         return response.text
