@@ -1,16 +1,32 @@
 from typing import List, Union, Generator, Iterator
 from schemas import OpenAIChatMessage
-import requests
 
 
 class Pipeline:
     def __init__(self):
+        # You can also set the pipelines that are available in this pipeline.
+        # Set manifold to True if you want to use this pipeline as a manifold.
+        # Manifold pipelines can have multiple pipelines.
+        self.type = "manifold"
+
         # Optionally, you can set the id and name of the pipeline.
         # Assign a unique identifier to the pipeline.
         # The identifier must be unique across all pipelines.
         # The identifier must be an alphanumeric string that can include underscores or hyphens. It cannot contain spaces, special characters, slashes, or backslashes.
-        self.id = "openai_pipeline"
-        self.name = "OpenAI Pipeline"
+        self.id = "manifold_pipeline"
+
+        # Optionally, you can set the name of the manifold pipeline.
+        self.name = "Manifold: "
+        self.pipelines = [
+            {
+                "id": "pipeline-1",  # This will turn into `manifold_pipeline.pipeline-1`
+                "name": "Pipeline 1",  # This will turn into `Manifold: Pipeline 1`
+            },
+            {
+                "id": "pipeline-2",
+                "name": "Pipeline 2",
+            },
+        ]
         pass
 
     async def on_startup(self):
@@ -26,32 +42,11 @@ class Pipeline:
     def pipe(
         self, user_message: str, model_id: str, messages: List[dict], body: dict
     ) -> Union[str, Generator, Iterator]:
-        # This is where you can add your custom pipelines like RAG.'
+        # This is where you can add your custom pipelines like RAG.
         print(f"pipe:{__name__}")
 
         print(messages)
         print(user_message)
+        print(body)
 
-        OPENAI_API_KEY = "your-openai-api-key-here"
-        MODEL = "gpt-3.5-turbo"
-
-        headers = {}
-        headers["Authorization"] = f"Bearer {OPENAI_API_KEY}"
-        headers["Content-Type"] = "application/json"
-
-        try:
-            r = requests.post(
-                url="https://api.openai.com/v1/chat/completions",
-                json={**body, "model": MODEL},
-                headers=headers,
-                stream=True,
-            )
-
-            r.raise_for_status()
-
-            if body["stream"]:
-                return r.iter_lines()
-            else:
-                return r.json()
-        except Exception as e:
-            return f"Error: {e}"
+        return f"{model_id} response to: {user_message}"

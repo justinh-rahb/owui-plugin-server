@@ -470,10 +470,7 @@ async def update_valves(pipeline_id: str, form_data: dict):
 @app.post("/v1/{pipeline_id}/filter/inlet")
 @app.post("/{pipeline_id}/filter/inlet")
 async def filter_inlet(pipeline_id: str, form_data: FilterForm):
-    if (
-        pipeline_id not in app.state.PIPELINES
-        or app.state.PIPELINES[pipeline_id].get("type", "pipe") != "filter"
-    ):
+    if pipeline_id not in app.state.PIPELINES:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Filter {pipeline_id} not found",
@@ -498,10 +495,7 @@ async def filter_inlet(pipeline_id: str, form_data: FilterForm):
 @app.post("/v1/{pipeline_id}/filter/outlet")
 @app.post("/{pipeline_id}/filter/outlet")
 async def filter_outlet(pipeline_id: str, form_data: FilterForm):
-    if (
-        pipeline_id not in app.state.PIPELINES
-        or app.state.PIPELINES[pipeline_id].get("type", "pipe") != "filter"
-    ):
+    if pipeline_id not in app.state.PIPELINES:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Filter {pipeline_id} not found",
@@ -526,8 +520,8 @@ async def filter_outlet(pipeline_id: str, form_data: FilterForm):
 @app.post("/v1/chat/completions")
 @app.post("/chat/completions")
 async def generate_openai_chat_completion(form_data: OpenAIChatCompletionForm):
-    user_message = get_last_user_message(form_data.messages.model_dump())
     messages = [message.model_dump() for message in form_data.messages]
+    user_message = get_last_user_message(messages)
 
     if (
         form_data.model not in app.state.PIPELINES

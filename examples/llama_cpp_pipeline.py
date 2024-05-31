@@ -1,3 +1,13 @@
+"""
+title: Llama C++ Pipeline
+author: open-webui
+date: 2024-05-30
+version: 1.0
+license: MIT
+description: A pipeline for generating responses using the Llama C++ library.
+requirements: llama-cpp-python
+"""
+
 from typing import List, Union, Generator, Iterator
 from schemas import OpenAIChatMessage
 
@@ -36,7 +46,7 @@ class Pipeline:
     def pipe(
         self, user_message: str, model_id: str, messages: List[dict], body: dict
     ) -> Union[str, Generator, Iterator]:
-        # This is where you can add your custom pipelines like RAG.'
+        # This is where you can add your custom pipelines like RAG.
         print(f"pipe:{__name__}")
 
         print(messages)
