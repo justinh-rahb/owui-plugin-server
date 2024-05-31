@@ -13,7 +13,7 @@ import os
 import google.generativeai as genai
 from typing import List, Union, Generator, Iterator
 from pydantic import BaseModel
-import requests
+import pprint
 
 class Pipeline:
     def __init__(self):
@@ -27,31 +27,37 @@ class Pipeline:
         self.valves = Valves(GOOGLEAI_API_KEY=os.getenv("GOOGLEAI_API_KEY"))
         genai.configure(api_key=self.valves.GOOGLEAI_API_KEY)
 
-    def get_google_models(self):
-        # This could fetch models dynamically from Google in the future
-        return [
-            {"id": "gemini-1.5-flash", "name": "gemini-1.5-flash"},
-            {"id": "gemini-1.5-pro", "name": "gemini-1.5-pro"},
-            {"id": "gemini-pro", "name": "gemini-pro"},
-            {"id": "gemini-pro-vision", "name": "gemini-pro-vision"},
-            # Add other Google models as they become available
-        ]
+    def list_google_models(self):
+        try:
+            # Fetch the models available from Google API
+            models = genai.list_models()
+            available_models = []
+            for model in models:
+                available_models.append({
+                    "id": model.id,  # assuming model object has an id attribute
+                    "name": model.name  # assuming model object has a name attribute
+                })
+            return available_models
+        except Exception as e:
+            print(f"Failed to fetch models: {e}")
+            return []
 
     async def on_startup(self):
         print(f"on_startup:{__name__}")
-        pass
+        # Optionally, you can list models here to verify connectivity
+        self.models = self.list_google_models()
+        print(f"Available models: {self.models}")
 
     async def on_shutdown(self):
         print(f"on_shutdown:{__name__}")
-        pass
 
     async def on_valves_updated(self):
         # This function is called when the valves are updated.
         genai.configure(api_key=self.valves.GOOGLEAI_API_KEY)
-        pass
 
     def pipelines(self) -> List[dict]:
-        return self.get_google_models()
+        # Return the dynamically fetched list of models
+        return self.list_google_models()
 
     def pipe(
         self, user_message: str, model_id: str, messages: List[dict], body: dict
@@ -66,10 +72,8 @@ class Pipeline:
 
     def stream_response(self, model_id: str, messages: List[dict], body: dict) -> Generator:
         params = self.translate_parameters(body)
-        # Prepend 'models/' to the model_id before passing it to the API call
-        full_model_id = f"models/{model_id}"
         response = genai.generate_text(
-            model=full_model_id,
+            model=model_id,
             prompt=messages[-1]['content'],
             stream=True,
             **params
@@ -80,10 +84,9 @@ class Pipeline:
 
     def get_completion(self, model_id: str, messages: List[dict], body: dict) -> str:
         params = self.translate_parameters(body)
-        # Prepend 'models/' to the model_id before passing it to the API call
-        full_model_id = f"models/{model_id}"
+        # Directly pass model_id without the 'models/' prefix
         response = genai.generate_text(
-            model=full_model_id,
+            model=model_id,
             prompt=messages[-1]['content'],
             **params
         )
