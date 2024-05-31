@@ -11,7 +11,7 @@ environment_variables: GOOGLEAI_API_KEY
 
 import os
 import google.generativeai as genai
-from typing import List, Union, Generator, Iterator
+from typing import List, Union, Generator
 from pydantic import BaseModel
 
 
@@ -20,53 +20,42 @@ class Pipeline:
         self.type = "manifold"
         self.id = "google"
         self.name = "google/"
-
+        
         class Valves(BaseModel):
             GOOGLEAI_API_KEY: str
-
-        self.valves = Valves(**{"GOOGLEAI_API_KEY": os.getenv("GOOGLEAI_API_KEY")})
+            
+        self.valves = Valves(GOOGLEAI_API_KEY=os.getenv("GOOGLEAI_API_KEY"))
         genai.configure(api_key=self.valves.GOOGLEAI_API_KEY)
-
-    def get_google_models(self):
-        # Update with available Google Gemini models
+        
+    def get_google_models(self) -> List[dict]:
+        # List available Google Gemini models
         return [
-            {"id": "gemini-1.5-flash", "name": "gemini-1.5-flash"},
-            {"id": "gemini-1.5-pro", "name": "gemini-1.5-pro"},
-            {"id": "gemini-pro", "name": "gemini-pro"},
-            {"id": "gemini-pro-vision", "name": "gemini-pro-vision"}, 
-            # Add others as they are released
+            {"id": "gemini-1.5-flash", "name": "Gemini 1.5 Flash"},
+            {"id": "gemini-1.5-pro", "name": "Gemini 1.5 Pro"},
+            {"id": "gemini-pro", "name": "Gemini Pro"},
+            {"id": "gemini-pro-vision", "name": "Gemini Pro Vision"},
+            # Add other models as they are released
         ]
 
     async def on_startup(self):
-        print(f"on_startup:{__name__}")
-        pass
+        print(f"Starting up: {__name__}")
 
     async def on_shutdown(self):
-        print(f"on_shutdown:{__name__}")
-        pass
-
-    async def on_valves_update(self):
-        # This function is called when the valves are updated.
-        genai.configure(api_key=self.valves.GOOGLEAI_API_KEY)
-        pass
-
-    def pipelines(self) -> List[dict]:
-        return self.get_google_models()
+        print(f"Shutting down: {__name__}")
 
     def pipe(
         self, user_message: str, model_id: str, messages: List[dict], body: dict
-    ) -> Union[str, Generator, Iterator]:
-        try:
-            if messages is None:
-                messages = []
-            messages.append({"role": "user", "content": user_message})
-
-            if body.get("stream", False):
-                return self.stream_response(model_id, messages, body)
-            else:
-                return self.get_completion(model_id, messages, body)
-        except Exception as e:
-            return f"Error: {e}"
+    ) -> Union[str, Generator]:
+        if messages is None:
+            messages = []
+        messages.append({"role": "user", "content": user_message})
+        
+        params = self.translate_parameters(body)
+        # Check if streaming is requested
+        if body.get("stream", False):
+            return self.stream_response(model_id, messages, params)
+        else:
+            return self.get_completion(model_id, messages, params)
 
     def translate_parameters(self, body: dict) -> dict:
         return {
@@ -78,25 +67,25 @@ class Pipeline:
         }
 
     def stream_response(
-        self, model_id: str, messages: List[dict], body: dict
+        self, model_id: str, messages: List[dict], params: dict
     ) -> Generator:
-        params = self.translate_parameters(body)
-        model = genai.GenerativeModel(model=model_id) 
+        model = genai.GenerativeModel.init(model_id=model_id)
         response = model.generate_text(
-            **params,
-            prompt=messages[-1]['content'],  
-            stream=True, # Enable streaming
+            prompt=messages[-1]['content'],
+            stream=True,
+            **params
         )
 
         # Gemini doesn't use chunks with types. Yield text directly.
         for chunk in response:
             yield chunk.text 
 
-    def get_completion(self, model_id: str, messages: List[dict], body: dict) -> str:
-        params = self.translate_parameters(body)
-        model = genai.GenerativeModel(model=model_id) 
+    def get_completion(
+        self, model_id: str, messages: List[dict], params: dict
+    ) -> str:
+        model = genai.GenerativeModel.init(model_id=model_id)
         response = model.generate_text(
-            **params,
-            prompt=messages[-1]['content'] 
+            prompt=messages[-1]['content'],
+            **params
         )
         return response.text
