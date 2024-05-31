@@ -34,8 +34,8 @@ class Pipeline:
             available_models = []
             for model in models:
                 available_models.append({
-                    "id": model.id,  # assuming model object has an id attribute
-                    "name": model.name  # assuming model object has a name attribute
+                    "id": model.name,  # Use model.name for the ID
+                    "name": model.description  # Use model.description for the name
                 })
             return available_models
         except Exception as e:
@@ -84,7 +84,6 @@ class Pipeline:
 
     def get_completion(self, model_id: str, messages: List[dict], body: dict) -> str:
         params = self.translate_parameters(body)
-        # Directly pass model_id without the 'models/' prefix
         response = genai.generate_text(
             model=model_id,
             prompt=messages[-1]['content'],
