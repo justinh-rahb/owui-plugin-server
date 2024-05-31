@@ -5,15 +5,15 @@ date: 2024-05-29
 version: 1.0
 license: MIT
 description: A pipeline for generating text using the Google Gemini API.
-dependencies: requests, google-generativeai
+requirements: requests, google-generativeai
 environment_variables: GOOGLEAI_API_KEY
 """
 
 import os
 import google.generativeai as genai
-from typing import List, Union, Generator
+from typing import List, Union, Generator, Iterator
 from pydantic import BaseModel
-
+import requests
 
 class Pipeline:
     def __init__(self):
@@ -26,40 +26,64 @@ class Pipeline:
             
         self.valves = Valves(GOOGLEAI_API_KEY=os.getenv("GOOGLEAI_API_KEY"))
         genai.configure(api_key=self.valves.GOOGLEAI_API_KEY)
-        
-    def get_google_models(self) -> List[dict]:
-        # List available Google Gemini models
+
+    def get_google_models(self):
+        # This could fetch models dynamically from Google in the future
         return [
-            {"id": "gemini-1.5-flash", "name": "Gemini 1.5 Flash"},
-            {"id": "gemini-1.5-pro", "name": "Gemini 1.5 Pro"},
-            {"id": "gemini-pro", "name": "Gemini Pro"},
-            {"id": "gemini-pro-vision", "name": "Gemini Pro Vision"},
-            # Add other models as they are released
+            {"id": "gemini-1.5-flash", "name": "gemini-1.5-flash"},
+            {"id": "gemini-1.5-pro", "name": "gemini-1.5-pro"},
+            {"id": "gemini-pro", "name": "gemini-pro"},
+            {"id": "gemini-pro-vision", "name": "gemini-pro-vision"},
+            # Add other Google models as they become available
         ]
 
     async def on_startup(self):
-        print(f"Starting up: {__name__}")
+        print(f"on_startup:{__name__}")
+        pass
 
     async def on_shutdown(self):
-        print(f"Shutting down: {__name__}")
+        print(f"on_shutdown:{__name__}")
+        pass
+
+    async def on_valves_updated(self):
+        # This function is called when the valves are updated.
+        genai.configure(api_key=self.valves.GOOGLEAI_API_KEY)
+        pass
 
     def pipelines(self) -> List[dict]:
-        # Retrieves and returns a list of available models
         return self.get_google_models()
 
     def pipe(
         self, user_message: str, model_id: str, messages: List[dict], body: dict
-    ) -> Union[str, Generator]:
-        if messages is None:
-            messages = []
-        messages.append({"role": "user", "content": user_message})
-        
+    ) -> Union[str, Generator, Iterator]:
+        try:
+            if body.get("stream", False):
+                return self.stream_response(model_id, messages, body)
+            else:
+                return self.get_completion(model_id, messages, body)
+        except Exception as e:
+            return f"Error: {e}"
+
+    def stream_response(
+        self, model_id: str, messages: List[dict], body: dict
+    ) -> Generator:
         params = self.translate_parameters(body)
-        # Check if streaming is requested
-        if body.get("stream", False):
-            return self.stream_response(model_id, messages, params)
-        else:
-            return self.get_completion(model_id, messages, params)
+        response = genai.GenerativeModel.init(model_id=model_id).generate_text(
+            prompt=messages[-1]['content'],  
+            stream=True,
+            **params
+        )
+
+        for chunk in response:
+            yield chunk.text  # Assume chunks come with a 'text' attribute
+
+    def get_completion(self, model_id: str, messages: List[dict], body: dict) -> str:
+        params = self.translate_parameters(body)
+        response = genai.GenerativeModel.init(model_id=model_id).generate_text(
+            prompt=messages[-1]['content'], 
+            **params
+        )
+        return response.text
 
     def translate_parameters(self, body: dict) -> dict:
         return {
@@ -69,31 +93,3 @@ class Pipeline:
             "top_p": body.get("top_p", 0.9),
             "stop_sequences": body.get("stop", [])
         }
-
-    def stream_response(
-        self, model_id: str, messages: List[dict], params: dict
-    ) -> Generator:
-        try:
-            model = genai.GenerativeModel.init(model_id=model_id)
-            response = model.generate_text(
-                prompt=messages[-1]['content'],
-                stream=True,
-                **params
-            )
-            for chunk in response:
-                yield chunk.text 
-        except Exception as e:
-            print(f"Error in stream_response: {e}")
-
-    def get_completion(
-        self, model_id: str, messages: List[dict], params: dict
-    ) -> str:
-        try:
-            model = genai.GenerativeModel.init(model_id=model_id)
-            response = model.generate_text(
-                prompt=messages[-1]['content'],
-                **params
-            )
-            return response.text
-        except Exception as e:
-            print(f"Error in get_completion: {e}")
