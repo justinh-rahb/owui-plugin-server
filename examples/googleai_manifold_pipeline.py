@@ -20,10 +20,10 @@ class Pipeline:
         self.type = "manifold"
         self.id = "google"
         self.name = "google/"
-        
+
         class Valves(BaseModel):
             GOOGLEAI_API_KEY: str
-            
+
         self.valves = Valves(GOOGLEAI_API_KEY=os.getenv("GOOGLEAI_API_KEY"))
         genai.configure(api_key=self.valves.GOOGLEAI_API_KEY)
 
@@ -68,8 +68,8 @@ class Pipeline:
         params = self.translate_parameters(body)
         # Assuming model_id needs to be passed during the generate_text call
         response = genai.generate_text(
-            model=model_id,  
-            prompt=messages[-1]['content'],  
+            model=model_id,
+            prompt=messages[-1]['content'],
             stream=True,
             **params
         )
@@ -81,7 +81,7 @@ class Pipeline:
         params = self.translate_parameters(body)
         # Assuming model_id needs to be passed during the generate_text call
         response = genai.generate_text(
-            model=model_id, 
+            model=model_id,
             prompt=messages[-1]['content'],
             **params
         )
