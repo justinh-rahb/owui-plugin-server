@@ -27,6 +27,9 @@ redis
 sqlmodel
 chromadb
 
+# Deployment
+langfuse
+
 # ML libraries
 torch
 numpy
@@ -40,6 +43,7 @@ sentence-transformers
 transformers
 tokenizers
 nltk
+tiktoken
 
 # Image processing
 Pillow
